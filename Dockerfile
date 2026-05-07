@@ -23,15 +23,14 @@ COPY . .
 
 RUN pnpm build
 
-RUN cd ui \
-  && pnpm install \
-  && cd .. \
-  && CI=true pnpm ui:build \
+RUN OPENCLAW_CONTROL_UI_BASE_PATH=/openclaw/ pnpm ui:build \
   && test -f dist/control-ui/index.html
 
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV OPENCLAW_GATEWAY_PORT=8080
+ENV OPENCLAW_STATE_DIR=/data/.openclaw
+ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 
 EXPOSE 8080
 
