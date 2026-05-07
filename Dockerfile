@@ -29,4 +29,4 @@ ENV OPENCLAW_GATEWAY_PORT=8080
 
 EXPOSE 8080
 
-CMD ["pnpm", "openclaw", "gateway", "run", "--port", "8080"]
+CMD ["pnpm", "openclaw", "gateway", "run", "--allow-unconfigured", "--port", "8080"]
