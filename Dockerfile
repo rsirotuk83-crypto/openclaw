@@ -22,7 +22,12 @@ RUN corepack enable \
 COPY . .
 
 RUN pnpm build
-RUN pnpm ui:build
+
+RUN cd ui \
+  && pnpm install \
+  && cd .. \
+  && CI=true pnpm ui:build \
+  && test -f dist/control-ui/index.html
 
 ENV NODE_ENV=production
 ENV PORT=8080
