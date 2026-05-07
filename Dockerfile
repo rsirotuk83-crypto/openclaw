@@ -26,6 +26,7 @@ RUN pnpm build || true
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV OPENCLAW_GATEWAY_PORT=8080
+
 EXPOSE 8080
 
-CMD ["pnpm", "start"]
+CMD ["pnpm", "openclaw", "gateway", "run", "--host", "0.0.0.0", "--port", "8080"]
