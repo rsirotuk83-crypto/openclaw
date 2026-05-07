@@ -1,30 +1,9 @@
-FROM node:22-bookworm
+FROM ghcr.io/openclaw/openclaw:latest
 
-RUN apt-get update \
-  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    git \
-    python3 \
-    build-essential \
-  && rm -rf /var/lib/apt/lists/*
+USER root
 
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY patches ./patches
-COPY scripts ./scripts
-
-RUN corepack enable \
-  && corepack prepare pnpm@10.12.4 --activate \
-  && pnpm install --frozen-lockfile
-
-COPY . .
-
-RUN pnpm build
-
-RUN OPENCLAW_CONTROL_UI_BASE_PATH=/openclaw/ pnpm ui:build \
-  && test -f dist/control-ui/index.html
+RUN mkdir -p /data/.openclaw /data/workspace \
+  && chmod -R 777 /data
 
 ENV NODE_ENV=production
 ENV PORT=8080
@@ -34,4 +13,6 @@ ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 
 EXPOSE 8080
 
-CMD ["pnpm", "openclaw", "gateway", "run", "--port", "8080", "--allow-unconfigured"]
+ENTRYPOINT []
+
+CMD ["openclaw", "gateway", "run", "--port", "8080", "--allow-unconfigured"]
