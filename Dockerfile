@@ -21,7 +21,8 @@ RUN corepack enable \
 
 COPY . .
 
-RUN pnpm build || true
+RUN pnpm build
+RUN pnpm ui:build
 
 ENV NODE_ENV=production
 ENV PORT=8080
