@@ -12,6 +12,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 
 RUN corepack enable \
   && corepack prepare pnpm@10.12.4 --activate \
