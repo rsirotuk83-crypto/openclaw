@@ -21,6 +21,8 @@ RUN cat > /usr/local/bin/openclaw-railway-start <<'SH'
 #!/bin/sh
 set -eu
 
+echo "[bootstrap] START openclaw-railway-start"
+
 mkdir -p /data/.openclaw /data/workspace
 
 node <<'NODE'
@@ -38,7 +40,7 @@ try {
     cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
   }
 } catch (err) {
-  console.error("[bootstrap] Existing config is not valid JSON. Backing it up and starting clean:", err.message);
+  console.error("[bootstrap] Existing config is invalid JSON. Backing up:", err.message);
   try {
     fs.copyFileSync(configPath, `${configPath}.broken-${Date.now()}`);
   } catch (_) {}
@@ -65,6 +67,7 @@ cfg.gateway.port = gatewayPort;
 
 cfg.gateway.auth = cfg.gateway.auth || {};
 cfg.gateway.auth.mode = "token";
+
 if (gatewayToken) {
   cfg.gateway.auth.token = gatewayToken;
 }
@@ -81,29 +84,17 @@ cfg.gateway.controlUi.allowedOrigins = Array.from(
 );
 
 /**
- * Model defaults.
- * Critical: Codex OAuth requires openai-codex/*, not openai/*.
+ * Critical model fix.
+ * Codex OAuth requires openai-codex/*, not openai/*.
  */
 cfg.agents = cfg.agents || {};
 cfg.agents.defaults = cfg.agents.defaults || {};
 cfg.agents.defaults.model = cfg.agents.defaults.model || {};
 cfg.agents.defaults.model.primary = primaryModel;
-cfg.agents.defaults.model.fallbacks = Array.from(
-  new Set([
-    primaryModel,
-    ...(cfg.agents.defaults.model.fallbacks || []),
-  ])
-).filter((m) => m !== "openai/gpt-5.5" && m !== "openai/gpt-5.4");
-
-cfg.agents.defaults.models = cfg.agents.defaults.models || {};
-cfg.agents.defaults.models[primaryModel] = cfg.agents.defaults.models[primaryModel] || {
-  alias: "OpenAI Codex GPT-5.5",
-};
+cfg.agents.defaults.model.fallbacks = [primaryModel];
 
 /**
- * Telegram channel.
- * Token stays in Railway Variables. We copy it into runtime config so the
- * gateway always starts with Telegram enabled after every deploy/restart.
+ * Telegram
  */
 cfg.channels = cfg.channels || {};
 cfg.channels.telegram = cfg.channels.telegram || {};
@@ -114,23 +105,16 @@ if (telegramToken) {
 }
 
 cfg.channels.telegram.dmPolicy = cfg.channels.telegram.dmPolicy || "pairing";
-cfg.channels.telegram.streaming = cfg.channels.telegram.streaming || "partial";
 cfg.channels.telegram.dms = cfg.channels.telegram.dms !== false;
 cfg.channels.telegram.groupPolicy = cfg.channels.telegram.groupPolicy || "open";
-
-cfg.channels.telegram.groups = cfg.channels.telegram.groups || {};
-cfg.channels.telegram.groups["*"] = {
-  ...(cfg.channels.telegram.groups["*"] || {}),
-  groupPolicy: "open",
-  requireMention: true,
-};
+cfg.channels.telegram.streaming = cfg.channels.telegram.streaming || "partial";
 
 /**
  * Bind Telegram default account to main agent.
  */
 cfg.bindings = Array.isArray(cfg.bindings) ? cfg.bindings : [];
 
-const hasTelegramMainBinding = cfg.bindings.some((binding) => {
+const hasTelegramBinding = cfg.bindings.some((binding) => {
   return (
     binding &&
     binding.agentId === "main" &&
@@ -140,18 +124,18 @@ const hasTelegramMainBinding = cfg.bindings.some((binding) => {
   );
 });
 
-if (!hasTelegramMainBinding) {
+if (!hasTelegramBinding) {
   cfg.bindings.push({
     agentId: "main",
     match: {
       channel: "telegram",
-      accountId: "default",
-    },
+      accountId: "default"
+    }
   });
 }
 
 /**
- * Keep useful metadata so OpenClaw does not see a tiny/empty config as suspicious.
+ * Metadata to avoid tiny/empty config anomaly.
  */
 cfg.meta = cfg.meta || {};
 cfg.meta.managedBy = "railway-openclaw-bootstrap";
@@ -166,11 +150,13 @@ console.log("[bootstrap] telegram token:", telegramToken ? "set" : "MISSING");
 console.log("[bootstrap] bindings:", JSON.stringify(cfg.bindings));
 NODE
 
-echo "[bootstrap] verifying OpenClaw config..."
+echo "[bootstrap] verify model from config:"
 openclaw config get agents.defaults.model.primary || true
-openclaw config get channels.telegram.enabled || true
-openclaw config get channels.telegram.dmPolicy || true
 
+echo "[bootstrap] verify telegram enabled:"
+openclaw config get channels.telegram.enabled || true
+
+echo "[bootstrap] starting gateway..."
 exec openclaw gateway run --port "${OPENCLAW_GATEWAY_PORT:-8080}" --bind lan --allow-unconfigured
 SH
 
