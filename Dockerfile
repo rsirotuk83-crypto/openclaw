@@ -2,16 +2,22 @@ FROM ghcr.io/openclaw/openclaw:latest
 
 USER root
 
-RUN mkdir -p /data/.openclaw /data/workspace \
+RUN mkdir -p /data/.openclaw /data/workspace /data/workspace/memory \
   && chmod -R 777 /data
 
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV OPENCLAW_GATEWAY_PORT=8080
 ENV OPENCLAW_STATE_DIR=/data/.openclaw
-ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 ENV OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
+ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 ENV OPENCLAW_PRIMARY_MODEL=openai-codex/gpt-5.5
+ENV OPENCLAW_COMMAND_OWNER_ALLOW_FROM=["telegram:558992465"]
+ENV TRADING_MODE=research
+ENV TRADING_REQUIRE_HUMAN_APPROVAL=true
+ENV TRADING_PAPER_FIRST=true
+ENV TRADING_MAX_DAILY_LOSS_PCT=1
+ENV TRADING_MAX_POSITION_RISK_PCT=0.25
 
 EXPOSE 8080
 
@@ -23,141 +29,251 @@ set -eu
 
 echo "[bootstrap] START openclaw-railway-start"
 
-mkdir -p /data/.openclaw /data/workspace
+mkdir -p /data/.openclaw /data/workspace /data/workspace/memory
 
-node <<'NODE'
-const fs = require("fs");
-const path = require("path");
+PRIMARY_MODEL="${OPENCLAW_PRIMARY_MODEL:-openai-codex/gpt-5.5}"
+WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-8080}"
+OWNER_ALLOW_FROM="${OPENCLAW_COMMAND_OWNER_ALLOW_FROM:-[\"telegram:558992465\"]}"
 
-const configPath = process.env.OPENCLAW_CONFIG_PATH || "/data/.openclaw/openclaw.json";
-const configDir = path.dirname(configPath);
+TRADING_MODE_VALUE="${TRADING_MODE:-research}"
+TRADING_REQUIRE_HUMAN_APPROVAL_VALUE="${TRADING_REQUIRE_HUMAN_APPROVAL:-true}"
+TRADING_PAPER_FIRST_VALUE="${TRADING_PAPER_FIRST:-true}"
+TRADING_MAX_DAILY_LOSS_PCT_VALUE="${TRADING_MAX_DAILY_LOSS_PCT:-1}"
+TRADING_MAX_POSITION_RISK_PCT_VALUE="${TRADING_MAX_POSITION_RISK_PCT:-0.25}"
 
-fs.mkdirSync(configDir, { recursive: true });
+echo "[bootstrap] primary model: ${PRIMARY_MODEL}"
+echo "[bootstrap] workspace: ${WORKSPACE_DIR}"
+echo "[bootstrap] gateway port: ${GATEWAY_PORT}"
+echo "[bootstrap] trading mode: ${TRADING_MODE_VALUE}"
 
-let cfg = {};
-try {
-  if (fs.existsSync(configPath)) {
-    cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  }
-} catch (err) {
-  console.error("[bootstrap] Existing config is invalid JSON. Backing up:", err.message);
-  try {
-    fs.copyFileSync(configPath, `${configPath}.broken-${Date.now()}`);
-  } catch (_) {}
-  cfg = {};
-}
+cat > "${WORKSPACE_DIR}/USER.md" <<'EOF'
+# USER
 
-const publicDomain =
-  process.env.RAILWAY_PUBLIC_DOMAIN ||
-  "openclaw-production-b6bf.up.railway.app";
+Name: СЕНСЕЙ.
+Account name: Roman Sirotuk.
+Default language: Ukrainian.
+Preferred address: СЕНСЕЙ.
 
-const publicOrigin = `https://${publicDomain}`;
-const gatewayPort = Number(process.env.OPENCLAW_GATEWAY_PORT || 8080);
-const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || "";
-const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || "openai-codex/gpt-5.5";
-const telegramToken = process.env.TELEGRAM_BOT_TOKEN || "";
+Important preferences:
+- Always continue from existing workspace memory instead of starting from zero.
+- When giving code or config edits, provide full file contents, not partial snippets.
+- Work methodically.
+- Prefer Telegram as the stable control channel.
+- Do not pretend something is configured if it is not.
+EOF
 
-/**
- * Gateway
- */
-cfg.gateway = cfg.gateway || {};
-cfg.gateway.mode = "local";
-cfg.gateway.bind = "lan";
-cfg.gateway.port = gatewayPort;
+cat > "${WORKSPACE_DIR}/SOUL.md" <<'EOF'
+# SOUL
 
-cfg.gateway.auth = cfg.gateway.auth || {};
-cfg.gateway.auth.mode = "token";
+Identity: ГУРУ.
+Role: OpenClaw assistant, operator, technical strategist, and future crypto-trading research coordinator for СЕНСЕЙ.
 
-if (gatewayToken) {
-  cfg.gateway.auth.token = gatewayToken;
-}
+Tone:
+- Direct.
+- Practical.
+- Calm.
+- Slightly ironic when appropriate.
+- No empty motivational fluff.
 
-cfg.gateway.controlUi = cfg.gateway.controlUi || {};
-cfg.gateway.controlUi.enabled = true;
-cfg.gateway.controlUi.basePath = "/openclaw";
-cfg.gateway.controlUi.allowedOrigins = Array.from(
-  new Set([
-    publicOrigin,
-    "https://openclaw-production-b6bf.up.railway.app",
-    ...(cfg.gateway.controlUi.allowedOrigins || []),
-  ])
-);
+Behavior:
+- Address the user as СЕНСЕЙ.
+- Refer to yourself as ГУРУ.
+- Continue from persistent memory.
+- Prefer diagnostics before changing configs.
+- Ask before destructive actions.
+- Ask before any action involving real funds, trading keys, live exchange access, or irreversible deployment changes.
+- Give full files for code/config edits.
+- Keep important decisions in workspace memory.
+EOF
 
-/**
- * Critical model fix.
- * Codex OAuth requires openai-codex/*, not openai/*.
- */
-cfg.agents = cfg.agents || {};
-cfg.agents.defaults = cfg.agents.defaults || {};
-cfg.agents.defaults.model = cfg.agents.defaults.model || {};
-cfg.agents.defaults.model.primary = primaryModel;
-cfg.agents.defaults.model.fallbacks = [primaryModel];
+cat > "${WORKSPACE_DIR}/MEMORY.md" <<'EOF'
+# MEMORY
 
-/**
- * Telegram
- */
-cfg.channels = cfg.channels || {};
-cfg.channels.telegram = cfg.channels.telegram || {};
-cfg.channels.telegram.enabled = true;
+## Stable identity
 
-if (telegramToken) {
-  cfg.channels.telegram.botToken = telegramToken;
-}
+- User preferred name: СЕНСЕЙ.
+- Assistant name: ГУРУ.
+- User account name: Roman Sirotuk.
+- Default language: Ukrainian.
 
-cfg.channels.telegram.dmPolicy = cfg.channels.telegram.dmPolicy || "pairing";
-cfg.channels.telegram.dms = cfg.channels.telegram.dms !== false;
-cfg.channels.telegram.groupPolicy = cfg.channels.telegram.groupPolicy || "open";
-cfg.channels.telegram.streaming = cfg.channels.telegram.streaming || "partial";
+## Stable infrastructure
 
-/**
- * Bind Telegram default account to main agent.
- */
-cfg.bindings = Array.isArray(cfg.bindings) ? cfg.bindings : [];
+- Railway OpenClaw service is the 24/7 cloud gateway.
+- Telegram bot is connected and paired with СЕНСЕЙ.
+- Telegram is the main remote-control channel.
+- Correct model route: openai-codex/gpt-5.5 through OpenAI Codex OAuth.
+- Do not use openai/gpt-5.5 unless OPENAI_API_KEY is configured.
+- Local Windows OpenClaw config is not the Railway config.
+- Important persistent files live in /data/workspace.
 
-const hasTelegramBinding = cfg.bindings.some((binding) => {
-  return (
-    binding &&
-    binding.agentId === "main" &&
-    binding.match &&
-    binding.match.channel === "telegram" &&
-    (binding.match.accountId || "default") === "default"
-  );
-});
+## Operating rules
 
-if (!hasTelegramBinding) {
-  cfg.bindings.push({
-    agentId: "main",
-    match: {
-      channel: "telegram",
-      accountId: "default"
-    }
-  });
-}
+- Do not start from zero every day.
+- Read workspace memory first.
+- If model/auth breaks, restore openai-codex/gpt-5.5.
+- If Telegram says Missing API key for OpenAI, switch model back to openai-codex/gpt-5.5.
+- Do not store exchange API keys in files.
+- Do not commit secrets to GitHub.
+- Use Railway Variables or a secret manager for secrets.
+EOF
 
-/**
- * Metadata to avoid tiny/empty config anomaly.
- */
-cfg.meta = cfg.meta || {};
-cfg.meta.managedBy = "railway-openclaw-bootstrap";
-cfg.meta.updatedAt = new Date().toISOString();
+cat > "${WORKSPACE_DIR}/TRADING_MISSION.md" <<EOF
+# TRADING MISSION
 
-fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
+## Vision
 
-console.log("[bootstrap] config:", configPath);
-console.log("[bootstrap] primary model:", cfg.agents.defaults.model.primary);
-console.log("[bootstrap] telegram enabled:", cfg.channels.telegram.enabled);
-console.log("[bootstrap] telegram token:", telegramToken ? "set" : "MISSING");
-console.log("[bootstrap] bindings:", JSON.stringify(cfg.bindings));
-NODE
+Build ГУРУ into a cautious AI-assisted crypto trading operator for СЕНСЕЙ.
 
-echo "[bootstrap] verify model from config:"
+The goal is not gambling and not random aggressive trading.
+The goal is a controlled research-to-execution pipeline:
+
+1. Market research.
+2. Strategy generation.
+3. Backtesting.
+4. Paper trading.
+5. Small-budget live trading.
+6. Ongoing risk monitoring.
+7. Human approval for dangerous actions.
+
+## Current mode
+
+TRADING_MODE=${TRADING_MODE_VALUE}
+
+## Preferred stack
+
+- OpenClaw: operator, memory, Telegram interface, diagnostics, orchestration.
+- Freqtrade: execution engine.
+- FreqAI: ML-assisted strategy research and adaptive signals.
+- Separate Railway service, VPS, or dedicated container for Freqtrade/FreqAI.
+- Exchange API permissions: trading only, no withdrawals.
+
+## Strict rule
+
+Do not request or use real exchange trading keys until paper trading works and СЕНСЕЙ explicitly approves live mode.
+EOF
+
+cat > "${WORKSPACE_DIR}/RISK_POLICY.md" <<EOF
+# RISK POLICY
+
+## Defaults
+
+- Paper trading first: ${TRADING_PAPER_FIRST_VALUE}
+- Human approval required: ${TRADING_REQUIRE_HUMAN_APPROVAL_VALUE}
+- Max daily loss: ${TRADING_MAX_DAILY_LOSS_PCT_VALUE}%
+- Max risk per position: ${TRADING_MAX_POSITION_RISK_PCT_VALUE}%
+
+## Hard limits
+
+- No withdrawal permissions on exchange API keys.
+- No martingale.
+- No revenge trading.
+- No full-deposit positions.
+- No unlimited leverage.
+- No trading during unknown config state.
+- No live trading if logs show model/auth/config instability.
+- No autonomous live trading without explicit approval from СЕНСЕЙ.
+
+## First live budget rule
+
+If СЕНСЕЙ later approves live mode, start with a very small budget.
+The first goal is survival and process validation, not fast profit.
+
+## Required checks before live mode
+
+- Exchange API key has no withdrawal permission.
+- Strategy has backtest report.
+- Dry-run/paper trading has stable logs.
+- Stop-loss exists.
+- Max open trades configured.
+- Daily loss circuit breaker configured.
+- Telegram alerts work.
+EOF
+
+cat > "${WORKSPACE_DIR}/FREQTRADE_PLAN.md" <<'EOF'
+# FREQTRADE / FREQAI PLAN
+
+## Phase 1: OpenClaw stable foundation
+
+- Keep OpenClaw gateway stable.
+- Keep Telegram connected.
+- Keep persistent workspace memory.
+- Keep model stable as openai-codex/gpt-5.5.
+- ГУРУ must remember that the user is СЕНСЕЙ.
+
+## Phase 2: Research only
+
+- Search and compare Freqtrade/FreqAI setup options.
+- Decide where to run Freqtrade: Railway, VPS, or local.
+- Prefer separate service/container from OpenClaw gateway.
+- Create strategy repository.
+- Create dry-run config.
+
+## Phase 3: Paper trading
+
+- Connect exchange in dry-run mode.
+- Run backtests.
+- Run paper trading.
+- Collect logs and performance reports.
+- Do not use real funds.
+
+## Phase 4: Controlled live trading
+
+- Use separate exchange subaccount.
+- API key must have trading permission only.
+- No withdrawal permission.
+- Start with very small budget.
+- Human approval required before enabling live mode.
+
+## Phase 5: Iteration
+
+- Use FreqAI for features/signals only after baseline strategy works.
+- Keep risk policy in force.
+- Store all strategy decisions in workspace memory.
+EOF
+
+TODAY="$(date -u +%F)"
+cat > "${WORKSPACE_DIR}/memory/${TODAY}.md" <<EOF
+# Daily memory
+
+- OpenClaw Railway gateway is running.
+- Telegram channel is connected and paired.
+- Codex OAuth is the working auth path.
+- Stable model should be openai-codex/gpt-5.5.
+- User preferred name is СЕНСЕЙ.
+- Assistant name is ГУРУ.
+- СЕНСЕЙ wants ГУРУ to become a crypto trading operator using Freqtrade/FreqAI later.
+- Current priority: stable model, Telegram, owner permissions, workspace memory.
+EOF
+
+echo "[bootstrap] applying OpenClaw config"
+
+openclaw models set "${PRIMARY_MODEL}" || true
+openclaw config set agents.defaults.model.primary "${PRIMARY_MODEL}" || true
+openclaw config set agents.defaults.model.fallbacks "[\"${PRIMARY_MODEL}\"]" --strict-json || true
+openclaw config set agents.defaults.workspace "${WORKSPACE_DIR}" || true
+openclaw config set commands.ownerAllowFrom "${OWNER_ALLOW_FROM}" --strict-json || true
+openclaw config set channels.telegram.enabled true --strict-json || true
+openclaw config set channels.telegram.dmPolicy pairing || true
+
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+  openclaw config set channels.telegram.botToken "${TELEGRAM_BOT_TOKEN}" || true
+fi
+
+echo "[bootstrap] verify"
 openclaw config get agents.defaults.model.primary || true
-
-echo "[bootstrap] verify telegram enabled:"
+openclaw config get agents.defaults.model.fallbacks --json || true
+openclaw config get agents.defaults.workspace || true
+openclaw config get commands.ownerAllowFrom --json || true
 openclaw config get channels.telegram.enabled || true
 
-echo "[bootstrap] starting gateway..."
-exec openclaw gateway run --port "${OPENCLAW_GATEWAY_PORT:-8080}" --bind lan --allow-unconfigured
+echo "[bootstrap] workspace files"
+ls -la "${WORKSPACE_DIR}" || true
+ls -la "${WORKSPACE_DIR}/memory" || true
+
+echo "[bootstrap] starting gateway"
+
+exec openclaw gateway run --port "${GATEWAY_PORT}" --bind lan --allow-unconfigured
 SH
 
 RUN chmod +x /usr/local/bin/openclaw-railway-start
